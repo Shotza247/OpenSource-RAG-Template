@@ -29,20 +29,21 @@ prompt when adapting the template to another domain.
 1. Follow [setup](docs/setup.md) to create the environment and inspect configuration.
 2. Preview the master document locally. This loads and chunks text without sending it anywhere.
 3. Review which material belongs in data/public.
-4. Configure a free-access embedding service and chat model; provider availability is still pending.
+4. Follow [the live embedding demo](docs/embedding-demo.md) before configuring a chat model.
 5. Ingest a new corpus version, evaluate it, then activate it and test POST /ask.
 
-No paid endpoint is part of this template. The current embedding adapter expects the TEI
-/embed contract; an HF token alone does not provision that endpoint or make inference unlimited.
-Free shared-provider support may require another adapter. Do not enter a paid endpoint just
-to get past a configuration check.
+No paid endpoint is provisioned. The embedding client works with the shared HF Inference
+BGE-small endpoint as well as compatible TEI /embed endpoints. HF shared inference has
+limited credits, not unlimited free hosting; check your allowance before running imports.
 
 ## Current state
 
 - Qdrant is the default; Chroma is optional.
 - One LangChain agent, hosted-model clients, citations and versioned retrieval are implemented.
 - The private master document is available for local preview, not automatically published.
-- Actual hosted embedding, answer-quality evaluation and GitHub publication are pending.
+- Real hosted BGE-small embeddings created three synthetic demo vectors in local Qdrant.
+- POST /search tests retrieval without an LLM; chat setup and answer-quality evaluation remain pending.
+- GitHub publication is pending.
 - Google Drive sync comes next, then caching and monitoring when needed.
 
 Read [architecture](docs/architecture.md) for how the parts connect,

@@ -55,7 +55,37 @@ def answer_question(question):
         store.close()
 
 
-def create_app(answerer=None):
+class SearchHit(Citation):
+    text: str
+    score: float | None
+
+
+class SearchResponse(BaseModel):
+    matches: list[SearchHit]
+    request_id: str
+
+
+def search_question(question):
+    settings = get_settings()
+    embeddings = build_embedding_client(settings)
+    vector = embeddings.embed_query(question)
+    store = build_vector_store(settings)
+    try:
+        return [
+            {
+                "chunk_id": chunk.chunk_id,
+                "title": chunk.metadata.get("title", ""),
+                "section": chunk.metadata.get("section", ""),
+                "text": chunk.text,
+                "score": chunk.score,
+            }
+            for chunk in store.search(vector, settings.context_k)
+        ]
+    finally:
+        store.close()
+
+
+def create_app(answerer=None, searcher=None):
     app = FastAPI(title="Profile Agent RAG", version="0.2.0")
     settings = get_settings()
     app.add_middleware(
@@ -68,6 +98,22 @@ def create_app(answerer=None):
     @app.get("/health")
     def health():
         return {"status": "ok", "kind": "liveness"}
+
+    @app.post("/search", response_model=SearchResponse)
+    def search(body: AskRequest):
+        """Embed a question and retrieve public chunks; no LLM or reranker call."""
+        request_id = str(uuid4())
+        try:
+            return {
+                "matches": (searcher or search_question)(body.question),
+                "request_id": request_id,
+            }
+        except Exception as exc:  # noqa: BLE001 - redact provider errors
+            logger.warning("search_failed id=%s error_type=%s", request_id, type(exc).__name__)
+            raise HTTPException(
+                503,
+                detail={"message": "Search is temporarily unavailable.", "request_id": request_id},
+            ) from None
 
     @app.post("/ask", response_model=AskResponse)
     def ask(body: AskRequest):

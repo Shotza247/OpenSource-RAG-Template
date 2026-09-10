@@ -1,5 +1,32 @@
 # Setup and Verification Audit
 
+## 2026-09-10 - First real hosted embedding and retrieval
+
+- Status: fixed for embedding/search; chat model setup remains pending.
+- Initial state: private HF_TOKEN present, EMBEDDING_URL missing, dimensions incorrectly
+  set to 484, and new Qdrant collections empty.
+- Public HF model metadata confirmed BAAI/bge-small-en-v1.5 live for feature-extraction.
+  One synthetic sentence returned HTTP 200 and shape [1, 384] from the shared HF router.
+- Updated only embedding URL/model/dimensions and demo collection/version in ignored .env.
+  Preserved credentials and unrelated configuration. No dedicated endpoint or purchase.
+- examples/embedding-demo/sample.md: fictional public-safe data; ingestion produced
+  three chunks in embedding_demo-bd228c87eb28, corpus demo-001. Private career text untouched.
+- Live candidate retrieval ranked Project Atlas first for a rainfall question, then
+  demo-001 was activated. Exact Qdrant count API returned 3; vector size 384, Cosine.
+- src/profile_agent/api.py: added POST /search, query embedding plus vector retrieval,
+  no LLM/reranker, allowlisted response fields, generic provider-error responses.
+- Restarted only new API 8767. Initial HTTP probe preceded startup and was refused;
+  after startup, OpenAPI listed /health, /search, /ask. Live /search returned Atlas first
+  with score 0.74186003 and a request ID. Original 8766/6333 services unchanged.
+- Tests: initial run 44 passed, 4 fixture errors due to Windows shared-temp permissions.
+  Rerun with a fresh project-local --basetemp: 48 passed, 2 existing upstream warnings.
+  Ruff check passed. Automated simulated-provider tests are separate from live evidence.
+- docs/embedding-demo.md documents configuration, costs, ingestion, inspection and search.
+- Follow-up: choose chat model for /ask, curate public career corpus, evaluate broader
+  retrieval quality, then add Streamlit. One synthetic query is not a quality benchmark.
+- Security: token not printed or committed; keep API local pending access/rate controls.
+  Shared HF inference consumes limited included credits; free usage is not unlimited.
+
 ## 2026-09-10 - Separate clean baseline
 
 - Direction: user requested a separate repository while keeping the original intact.
