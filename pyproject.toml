@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "profile-agent-rag"
+version = "0.2.0"
+description = "Reusable hosted-model RAG with FastAPI, LangChain, Qdrant or Chroma."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "python-dotenv>=1,<2",
+  "requests>=2.32,<3", "qdrant-client>=1.14,<2",
+  "langchain>=1,<2", "langchain-openai>=1,<2",
+  "pypdf>=5,<7", "python-docx>=1.1,<2",
+]
+
+[project.optional-dependencies]
+chroma = ["chromadb-client>=1,<2"]
+dev = ["pytest>=8,<10", "ruff>=0.6,<1", "httpx>=0.27,<1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "scripts", "tests"]
