@@ -3,8 +3,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from profile_agent.config import Settings
-from profile_agent.embeddings import HFEmbeddingClient, validate_vectors
+from faq_agent.config import Settings
+from faq_agent.embeddings.embedder import HFEmbeddingClient, validate_vectors
 
 
 @pytest.mark.parametrize(
@@ -22,7 +22,7 @@ def test_hosted_embeddings_prefix_batch_and_shape(monkeypatch):
         calls.append(kwargs["json"]["inputs"])
         return Mock(json=lambda: [[1.0, 0.0] for _ in kwargs["json"]["inputs"]])
 
-    monkeypatch.setattr("profile_agent.embeddings.requests.post", post)
+    monkeypatch.setattr("faq_agent.embeddings.embedder.requests.post", post)
     s = replace(
         Settings(), embedding_url="https://test/embed", hf_token="test", vector_dimensions=2
     )

@@ -1,12 +1,12 @@
-from profile_agent.chunking import chunk_document
-from profile_agent.schemas import SourceDocument
+from faq_agent.chunking.chunker import chunk_document
+from faq_agent.schemas import SourceDocument
 
 
 def test_chunk_document_keeps_section_metadata() -> None:
     doc = SourceDocument(
-        source_id="profile",
-        path="profile.md",
-        title="Profile",
+        source_id="faq",
+        path="faq.md",
+        title="FAQ",
         text="# Experience\nBuilt AI systems.\n\n# Projects\nCreated Pulse360 and Fleet360.",
     )
 

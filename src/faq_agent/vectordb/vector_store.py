@@ -4,8 +4,8 @@ from typing import Protocol
 from urllib.parse import urlparse
 from uuid import NAMESPACE_URL, uuid5
 
-from profile_agent.embeddings import validate_vectors
-from profile_agent.schemas import Chunk, RetrievedChunk
+from faq_agent.embeddings.embedder import validate_vectors
+from faq_agent.schemas import Chunk, RetrievedChunk
 
 
 class VectorStore(Protocol):

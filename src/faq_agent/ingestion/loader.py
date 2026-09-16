@@ -2,7 +2,7 @@ import hashlib
 from dataclasses import replace
 from pathlib import Path
 
-from profile_agent.schemas import SourceDocument
+from faq_agent.schemas import SourceDocument
 
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx"}
 

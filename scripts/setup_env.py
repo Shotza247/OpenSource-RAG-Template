@@ -22,9 +22,6 @@ def sync_env(root):
     shutil.copyfile(example, target)
     for key, value in old.items():
         if key in defaults and value is not None:
-            # The MongoDB-era dimensions do not describe the newly selected BGE model.
-            if key == "VECTOR_DIMENSIONS" and "EMBEDDING_MODEL" not in old:
-                continue
             set_key(target, key, value)
     return target
 

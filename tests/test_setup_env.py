@@ -10,19 +10,19 @@ def module():
     return result
 
 
-def test_migration_keeps_known_secrets_and_archives_legacy(tmp_path):
+def test_sync_preserves_values_and_archives_previous_config(tmp_path):
     (tmp_path / ".env.example").write_text(
         "HF_TOKEN=\nEMBEDDING_MODEL=BAAI/bge-small-en-v1.5\nVECTOR_DIMENSIONS=384\n"
     )
-    old = "HF_TOKEN=hf_test_only\nMONGODB_URI=legacy\nVECTOR_DIMENSIONS=1024\n"
+    old = "HF_TOKEN=hf_test_only\nUNUSED_SETTING=old\nVECTOR_DIMENSIONS=1024\n"
     (tmp_path / ".env").write_text(old)
     module().sync_env(tmp_path)
     from dotenv import dotenv_values
 
     result = dotenv_values(tmp_path / ".env")
     assert result["HF_TOKEN"] == "hf_test_only"
-    assert result["VECTOR_DIMENSIONS"] == "384"
-    assert "MONGODB_URI" not in result
+    assert result["VECTOR_DIMENSIONS"] == "1024"
+    assert "UNUSED_SETTING" not in result
     assert next((tmp_path / ".local/archive").glob("*/legacy.env")).read_text() == old
 
 

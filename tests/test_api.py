@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from profile_agent.api import create_app
+from faq_agent.api.routes import create_app
 
 
 def client(answerer=None):
@@ -64,3 +64,12 @@ def test_cors():
         headers={"Origin": "https://untrusted.example", "Access-Control-Request-Method": "POST"},
     )
     assert "access-control-allow-origin" not in response.headers
+
+
+def test_service_errors_documented():
+    schema = client().get("/openapi.json").json()
+    for path in ("/search", "/ask"):
+        response = schema["paths"][path]["post"]["responses"]["503"]
+        assert response["content"]["application/json"]["schema"]["$ref"].endswith(
+            "/ServiceErrorResponse"
+        )

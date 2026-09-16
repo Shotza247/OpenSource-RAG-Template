@@ -4,9 +4,9 @@ from unittest.mock import Mock
 import pytest
 from qdrant_client import QdrantClient
 
-from profile_agent.config import Settings
-from profile_agent.schemas import Chunk
-from profile_agent.vector_store import ChromaVectorStore, QdrantVectorStore
+from faq_agent.config import Settings
+from faq_agent.schemas import Chunk
+from faq_agent.vectordb.vector_store import ChromaVectorStore, QdrantVectorStore
 
 
 def test_qdrant_version_isolation_and_idempotence():

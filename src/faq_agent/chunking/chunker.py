@@ -1,7 +1,7 @@
 import hashlib
 import re
 
-from profile_agent.schemas import Chunk, SourceDocument
+from faq_agent.schemas import Chunk, SourceDocument
 
 SECTION_RE = re.compile(r"^(#{1,3}\s+|[A-Z][A-Z0-9 &/.-]{3,}:?$)")
 
@@ -45,7 +45,7 @@ def chunk_documents(documents: list[SourceDocument]) -> list[Chunk]:
 
 
 def _split_sections(text: str) -> list[tuple[str, str]]:
-    current_name = "Profile"
+    current_name = "FAQ"
     current_lines: list[str] = []
     sections: list[tuple[str, str]] = []
 
@@ -55,7 +55,7 @@ def _split_sections(text: str) -> list[tuple[str, str]]:
             if current_lines:
                 sections.append((current_name, "\n".join(current_lines).strip()))
                 current_lines = []
-            current_name = line.lstrip("#").strip().rstrip(":") or "Profile"
+            current_name = line.lstrip("#").strip().rstrip(":") or "FAQ"
         else:
             current_lines.append(raw_line)
 

@@ -2,15 +2,15 @@ import importlib.util
 import json
 from pathlib import Path
 
-from profile_agent.config import Settings
+from faq_agent.config import Settings
 
 
 def test_preview_does_not_create_provider_or_store(tmp_path, monkeypatch, capsys):
-    script = Path(__file__).resolve().parents[1] / "scripts" / "ingest_profile.py"
+    script = Path(__file__).resolve().parents[1] / "scripts" / "ingest_faq.py"
     spec = importlib.util.spec_from_file_location("ingest_preview", script)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    (tmp_path / "profile.txt").write_text("# Skills\nPython and SQL.")
+    (tmp_path / "faq.txt").write_text("# Skills\nPython and SQL.")
     monkeypatch.setattr(
         "sys.argv", ["ingest", "--source", str(tmp_path), "--version", "preview", "--dry-run"]
     )

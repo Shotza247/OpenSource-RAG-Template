@@ -5,11 +5,11 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from profile_agent.chunking import chunk_document
-from profile_agent.config import get_settings
-from profile_agent.document_loader import load_documents
-from profile_agent.embeddings import build_embedding_client
-from profile_agent.vector_store import build_vector_store
+from faq_agent.chunking.chunker import chunk_document
+from faq_agent.config import get_settings
+from faq_agent.embeddings.embedder import build_embedding_client
+from faq_agent.ingestion.loader import load_documents
+from faq_agent.vectordb.vector_store import build_vector_store
 
 
 def main():

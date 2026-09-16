@@ -25,3 +25,8 @@ class RetrievedChunk:
     text: str
     score: float | None
     metadata: dict[str, Any] = field(default_factory=dict)
+    rerank_score: float | None = None
+
+    @property
+    def vector_score(self):
+        return self.score
