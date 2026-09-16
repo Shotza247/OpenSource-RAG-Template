@@ -1,51 +1,124 @@
-# Open-source RAG Template
+# FAQ RAG Workspace
 
-Start here. This repository is a clean, separate baseline for learning and reusing
-the portfolio RAG pipeline. The original project and its Git history are unchanged.
-The example Python package remains named profile_agent; replace its profile-specific
-prompt when adapting the template to another domain.
+A local document workspace: create a collection, upload a document, review chunks,
+approve hosted embeddings, then search or ask questions with source citations.
+FastAPI serves the backend, Streamlit is the test UI, Qdrant stores vectors, and
+Hugging Face hosts embedding and answer models. SQLite tracks document ingestion.
 
-## What is where?
+## Project structure
 
-| Path | Purpose |
-| --- | --- |
-| src/profile_agent/ | Backend: configuration, loading, chunking, embeddings, retrieval, agent, API |
-| scripts/ | Setup, local ingestion preview, ingestion, retrieval evaluation |
-| tests/ | Automated behaviour checks using simulated providers; not proof of real embedding |
-| data/private/ | Master career source, local only, excluded from Git and deployment |
-| data/public/ | Reviewed corpus approved for public answers, also excluded from Git |
-| docs/ | Setup, architecture, roadmap, evaluation and stack decision |
-| .env.example | Committed list of settings and safe defaults; contains no credentials |
-| .env | Your actual local settings; never committed; loaded by the backend |
-| pyproject.toml + uv.lock | Package requirements and reproducible resolved versions |
-| docker-compose.yml | Persistent local vector services |
-| Dockerfile | Optional container runtime for the API |
-| app.py | Vercel-compatible API entry point; cloud deployment is not complete |
-| .venv/ | Generated local Python environment, ignored by Git |
-| .local/ | Local configuration backups and preview logs, ignored by Git |
+```text
+OpenSource-RAG-Template/
+  README.md
+  pyproject.toml              # Dependencies and tool settings
+  uv.lock                    # Reproducible dependency resolution
+  .env.example               # Configuration reference, without secrets
+  .env                       # Private local configuration; ignored by Git
+  main.py                    # FastAPI entry point
+  streamlit_app.py            # UI entry point
+  docker-compose.yml         # Local Qdrant; optional Chroma profile
+  Dockerfile                 # API container definition
+  src/faq_agent/
+    config.py                # Validated settings and project paths
+    schemas.py               # Document, chunk and retrieval data types
+    ingestion/
+      loader.py              # Read documents for CLI ingestion
+      service.py             # Reviewed upload, catalog and storage lifecycle
+    chunking/chunker.py       # Section-aware character windows
+    embeddings/embedder.py   # Hosted embedding client and vector validation
+    vectordb/vector_store.py # Qdrant and optional Chroma adapters
+    retrieval/retriever.py   # Shared search and answer workflow
+    prompts/templates.py     # Grounding instructions and abstention text
+    llm/client.py            # Hosted synthesis and citation validation
+    api/
+      routes.py              # Health, search and ask
+      documents.py           # Collection and upload endpoints
+  scripts/                   # Environment setup, CLI ingestion, evaluation
+  tests/                     # Offline unit, integration and UI tests
+  examples/                  # Synthetic demo and FAQ source files
+  docs/
+    architecture.md          # Responsibilities, data flow, limitations
+    ui-testing.md            # Upload workflow and API reference
+    testing.md               # Automated and live verification
+  BUG_AUDIT.md               # Concise current verification/recovery record
+  .local/                    # Ignored SQLite catalog, logs and local backups
+```
 
-## Start in this order
+Each Python package contains an `__init__.py`. Dependencies live in pyproject.toml
+and uv.lock; no duplicate requirements.txt is maintained. Settings live in
+config.py and .env; no second YAML configuration layer is needed. Add utility
+modules only when there is shared logic to put in them.
 
-1. Follow [setup](docs/setup.md) to create the environment and inspect configuration.
-2. Preview the master document locally. This loads and chunks text without sending it anywhere.
-3. Review which material belongs in data/public.
-4. Follow [the live embedding demo](docs/embedding-demo.md) before configuring a chat model.
-5. Ingest a new corpus version, evaluate it, then activate it and test POST /ask.
+## Run locally
 
-No paid endpoint is provisioned. The embedding client works with the shared HF Inference
-BGE-small endpoint as well as compatible TEI /embed endpoints. HF shared inference has
-limited credits, not unlimited free hosting; check your allowance before running imports.
+Requires Python 3.11-3.13, uv and Docker for Qdrant.
 
-## Current state
+```powershell
+uv sync --locked --extra dev --extra ui
+.\.venv\Scripts\python.exe scripts/setup_env.py --sync
+.\.venv\Scripts\python.exe scripts/setup_env.py --token
+docker compose up -d qdrant
+```
 
-- Qdrant is the default; Chroma is optional.
-- One LangChain agent, hosted-model clients, citations and versioned retrieval are implemented.
-- The private master document is available for local preview, not automatically published.
-- Real hosted BGE-small embeddings created three synthetic demo vectors in local Qdrant.
-- POST /search tests retrieval without an LLM; chat setup and answer-quality evaluation remain pending.
-- GitHub publication is pending.
-- Google Drive sync comes next, then caching and monitoring when needed.
+The setup script backs up an existing .env before merging current keys; it preserves
+configured values and never prints credentials. Set EMBEDDING_URL, HF_TOKEN and
+LLM_MODEL privately. VECTOR_URL must match QDRANT_PORT (this machine uses 6334;
+the template defaults to 6333). Existing configured values need not be reset.
 
-Read [architecture](docs/architecture.md) for how the parts connect,
-[roadmap](docs/roadmap.md) for the next milestones, and [BUG_AUDIT.md](BUG_AUDIT.md)
-for verification evidence.
+Start each server in a separate terminal from this folder:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8767
+```
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8502 --server.maxUploadSize 10 --browser.gatherUsageStats false
+```
+
+Open [Streamlit](http://127.0.0.1:8502) or [Swagger](http://127.0.0.1:8767/docs).
+The previous `faq_agent.api:app` entry point still works. Restart the API after
+changing settings. `FAQ_API_URL` overrides the UI's API address.
+
+## Workflow
+
+```mermaid
+flowchart LR
+    UI[Streamlit] --> Collection[Create or select collection]
+    Collection --> Upload[Upload document]
+    Upload --> Preview[Local extraction and chunk preview]
+    Preview --> Approve[Explicit approval]
+    Approve --> Embed[Hosted HF embeddings]
+    Embed --> Q[(Qdrant)]
+    UI --> Query[Question and collection scope]
+    Query --> Search[Shared vector search]
+    Search --> Q
+    Search --> Evidence[Chunks and vector scores]
+    Evidence --> Result[Search response]
+    Evidence --> LLM[Hosted HF synthesis]
+    LLM --> Answer[Answer and validated citations]
+```
+
+Preview is local and makes no model calls. Embed and store sends approved text to
+the configured embedding endpoint. Search embeds the question; Ask uses the same
+retrieval function and then generates an answer. Reranking is not currently used;
+the compatibility response field `rerank_score` is null.
+
+The existing synthetic `ui_smoke_test` collection can answer "What does Project
+Atlas show?". For your FAQ, select or create `pulse360_faq`, upload the document,
+review chunks, approve, then store. The original `embedding_demo-bd228c87eb28`
+collection remains accessible through requests without collection_id.
+
+## Verification and boundaries
+
+Verified locally on 2026-09-15: all 55 tests and lint passed. After restart,
+collection-scoped search/answer and the original demo search passed live checks;
+existing collection identities and document counts were unchanged.
+
+- [Tests and evaluation](docs/testing.md)
+- [Architecture and configuration](docs/architecture.md)
+- [UI workflow and endpoint reference](docs/ui-testing.md)
+
+This is a single-user local MVP. Keep servers on loopback. No authentication,
+background ingestion, OCR or production deployment is implemented. Preserve
+both the Qdrant volume and `.local/library.sqlite3`. Hosted model usage may consume
+credits; the application does not enforce provider billing caps.
