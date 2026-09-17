@@ -3,7 +3,8 @@
 A local document workspace: create a collection, upload a document, review chunks,
 approve hosted embeddings, then search or ask questions with source citations.
 FastAPI serves the backend, Streamlit is the test UI, Qdrant stores vectors, and
-Hugging Face hosts embedding and answer models. SQLite tracks document ingestion.
+Hugging Face hosts embedding and answer models.
+SQLite tracks document ingestion.
 
 ## Project structure
 
@@ -44,10 +45,12 @@ OpenSource-RAG-Template/
   .local/                    # Ignored SQLite catalog, logs and local backups
 ```
 
-Each Python package contains an `__init__.py`. Dependencies live in pyproject.toml
-and uv.lock; no duplicate requirements.txt is maintained. Settings live in
-config.py and .env; no second YAML configuration layer is needed. Add utility
-modules only when there is shared logic to put in them.
+Each Python package contains an `__init__.py`. 
+Dependencies live in pyproject.toml and uv.lock; no duplicate requirements.txt is maintained.
+Settings live in config.py and .env; no second YAML configuration layer is needed.
+```
+Only add utility modules when there is shared logic to put in them😉.
+```
 
 ## Run locally
 
@@ -61,9 +64,10 @@ docker compose up -d qdrant
 ```
 
 The setup script backs up an existing .env before merging current keys; it preserves
-configured values and never prints credentials. Set EMBEDDING_URL, HF_TOKEN and
-LLM_MODEL privately. VECTOR_URL must match QDRANT_PORT (this machine uses 6334;
-the template defaults to 6333). Existing configured values need not be reset.
+configured values and never prints credentials. 
+Set EMBEDDING_URL, HF_TOKEN and LLM_MODEL privately. 
+VECTOR_URL must match QDRANT_PORT (this machine uses 6334; the template defaults to 6333).
+Existing configured values need not be reset.
 
 Start each server in a separate terminal from this folder:
 
@@ -76,8 +80,8 @@ Start each server in a separate terminal from this folder:
 ```
 
 Open [Streamlit](http://127.0.0.1:8502) or [Swagger](http://127.0.0.1:8767/docs).
-The previous `faq_agent.api:app` entry point still works. Restart the API after
-changing settings. `FAQ_API_URL` overrides the UI's API address.
+The previous `faq_agent.api:app` entry point still works.
+Restart the API after changing settings. `FAQ_API_URL` overrides the UI's API address.
 
 ## Workflow
 
