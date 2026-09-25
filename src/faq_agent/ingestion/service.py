@@ -25,10 +25,13 @@ MAX_BYTES = 10 * 1024 * 1024
 
 
 class Library:
-    def __init__(self, settings, path=ROOT, client=None, embeddings=None):
+    def __init__(self, settings, path=None, client=None, embeddings=None):
         if settings.vector_store != "qdrant":
             raise HTTPException(409, "The upload library currently requires Qdrant")
-        self.s, self.path = settings, Path(path)
+        self.s, self.path = (
+            settings,
+            Path(path if path is not None else settings.catalog_path or ROOT),
+        )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.client = client or QdrantClient(
             url=settings.vector_url,
@@ -125,6 +128,9 @@ class Library:
                 vectors_config=m.VectorParams(
                     size=self.s.vector_dimensions, distance=m.Distance.COSINE
                 ),
+            )
+            self.client.create_payload_index(
+                physical, "document_id", m.PayloadSchemaType.KEYWORD, wait=True
             )
             db.execute(
                 "INSERT INTO collections VALUES (?,?,?,?)",
