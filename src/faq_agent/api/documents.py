@@ -6,6 +6,7 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
 
 from faq_agent.config import get_settings
@@ -19,7 +20,7 @@ logger = logging.getLogger("faq_agent")
 def redact_errors():
     try:
         yield
-    except HTTPException:
+    except (HTTPException, RequestValidationError):
         raise
     except Exception as exc:  # noqa: BLE001 - redact upstream exceptions at the API boundary
         request_id = str(uuid4())
