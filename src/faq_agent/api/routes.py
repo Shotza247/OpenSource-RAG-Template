@@ -62,6 +62,9 @@ class AskResponse(BaseModel):
     sources: list[ScoredCitation]
     status: str
     request_id: str
+    cache_hit: bool = False
+    cache_type: str = "none"
+    answer_generation_called: bool = False
 
 
 class SearchHit(ScoredCitation):
