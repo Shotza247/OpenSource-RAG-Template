@@ -1,10 +1,28 @@
 # FAQ RAG Workspace
 
+## Project scope and cloud progress
+
+This remains the independent Qdrant-focused OpenSource RAG template. The separate
+`Supabas_pulse360_RAG` project contains a copied baseline for future Supabase/pgvector
+development; it does not change this runtime.
+
+The two cloud test collections were migrated and verified. A fresh synthetic FAQ
+was subsequently uploaded through Streamlit to cloud, and cloud-backed search and
+generated answers passed. The full Pulse360 PDF and hosted API deployment remain pending. See
+[local/cloud sidebar switching](docs/cloud-runtime.md),
+[deployment history](docs/deployment-migration.md) and the
+[next cloud acceptance procedure](docs/cloud-upload-acceptance.md).
+
 A local document workspace: create a collection, upload a document, review chunks,
 approve hosted embeddings, then search or ask questions with source citations.
 FastAPI serves the backend, Streamlit is the test UI, Qdrant stores vectors, and
 Hugging Face hosts embedding and answer models.
 SQLite tracks document ingestion.
+
+Optional Docker Redis exact-answer caching is available for managed public FAQ
+collections. It is off by default and leaves the existing uncached workflow intact.
+See [answer-cache setup and verification](docs/answer-cache.md). Semantic/paraphrase
+reuse and LangCache integration are not implemented.
 
 ## Project structure
 
