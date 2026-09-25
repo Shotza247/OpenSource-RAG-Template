@@ -59,3 +59,42 @@ def test_api_down_is_visible():
         at = AppTest.from_file(str(APP), default_timeout=20).run()
         assert not at.exception
         assert "could not be reached" in at.error[0].value
+
+
+def test_invalid_collection_name_is_rejected_before_api_call():
+    with patch("requests.request", return_value=Mock(ok=True, json=list)) as request:
+        at = AppTest.from_file(str(APP), default_timeout=20).run()
+        at.text_input[0].set_value("My FAQ")
+        next(b for b in at.button if b.label == "Create collection").click().run()
+        assert not at.exception
+        assert "start with a lowercase letter" in at.error[0].value
+        assert all(call.args[0] == "GET" for call in request.call_args_list)
+
+
+def test_target_switch_clears_pending_state_and_routes_requests():
+    calls = []
+
+    def request(method, url, **kwargs):
+        calls.append(url)
+        return Mock(ok=True, json=list)
+
+    with (
+        patch.dict(
+            "os.environ",
+            {"FAQ_API_URL": "http://local.test", "FAQ_CLOUD_API_URL": "http://cloud.test"},
+        ),
+        patch("requests.request", side_effect=request),
+    ):
+        at = AppTest.from_file(str(APP), default_timeout=20).run()
+        assert calls[-1] == "http://local.test/collections"
+        at.session_state["preview"] = {"preview_id": "old-preview"}
+        at.session_state["history"] = [{"answer": "local-only"}]
+        at.session_state["approval_old-preview"] = True
+        at.toggle[0].set_value(True).run()
+        assert not at.exception
+        assert calls[-1] == "http://cloud.test/collections"
+        assert at.session_state["preview"] is None
+        assert at.session_state["history"] == []
+        assert "approval_old-preview" not in at.session_state
+        at.toggle[0].set_value(False).run()
+        assert calls[-1] == "http://local.test/collections"

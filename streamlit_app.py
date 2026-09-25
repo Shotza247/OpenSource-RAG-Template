@@ -2,12 +2,30 @@
 
 import hashlib
 import os
+import re
 
 import requests
 import streamlit as st
 
-API_URL = os.environ.get("FAQ_API_URL", "http://127.0.0.1:8767").rstrip("/")
-st.set_page_config(page_title="Qdrant FAQ workspace", page_icon=":material/description:", layout="wide")
+LOCAL_API_URL = os.environ.get("FAQ_API_URL", "http://127.0.0.1:8767").rstrip("/")
+CLOUD_API_URL = os.environ.get("FAQ_CLOUD_API_URL", "http://127.0.0.1:8768").rstrip("/")
+st.set_page_config(
+    page_title="Qdrant FAQ workspace", page_icon=":material/description:", layout="wide"
+)
+
+
+def change_target():
+    # Never carry previews, approval, upload widgets or conversation across environments.
+    for key in list(st.session_state):
+        if key != "cloud_target":
+            del st.session_state[key]
+
+
+with st.sidebar:
+    cloud_target = st.toggle("Qdrant Cloud", key="cloud_target", on_change=change_target)
+    st.caption("Destination: Qdrant Cloud" if cloud_target else "Destination: Local Qdrant")
+API_URL = CLOUD_API_URL if cloud_target else LOCAL_API_URL
+COLLECTION_KEY = "cloud_collection" if cloud_target else "collection"
 st.session_state.setdefault("preview", None)
 st.session_state.setdefault("history", [])
 st.session_state.setdefault("scope", None)
@@ -31,7 +49,14 @@ def api(method, path, **kwargs):
                 f"{detail.get('message', 'Request failed')} Request: {detail.get('request_id', '')}"
             )
         elif not isinstance(detail, str):
-            detail = "Invalid request. Check the collection name, file or question."
+            if path == "/collections" and response.status_code == 422:
+                detail = (
+                    "Collection name: use 3-48 characters, start with a lowercase letter, "
+                    "and use only lowercase letters, digits, underscores or hyphens. "
+                    "Example: pulse360_faq"
+                )
+            else:
+                detail = "Invalid request. Check the file or question."
         st.error(f"HTTP {response.status_code}: {detail}")
         st.stop()
     return response.json()
@@ -54,18 +79,39 @@ collections = api("GET", "/collections", timeout=15)
 names = [c["id"] for c in collections]
 pending = st.session_state.pop("select_next", None)
 if pending in names:
-    st.session_state["collection"] = pending
-if st.session_state.get("collection") not in names:
-    st.session_state.pop("collection", None)
+    st.session_state[COLLECTION_KEY] = pending
+if st.session_state.get(COLLECTION_KEY) not in names:
+    st.session_state.pop(COLLECTION_KEY, None)
 
 with st.sidebar:
     st.header("Collections")
-    chosen = st.selectbox("Active collection", names, index=0 if names else None, key="collection")
+    chosen = st.selectbox(
+        "Active collection", names, index=0 if names else None, key=COLLECTION_KEY
+    )
     if st.button("", icon=":material/refresh:", help="Refresh collections", key="refresh"):
         st.rerun()
     with st.form("create_collection"):
-        name = st.text_input("New collection name", placeholder="pulse360_faq", max_chars=48)
+        name = st.text_input(
+            "New collection name",
+            placeholder="pulse360_faq",
+            max_chars=48,
+        )
+        st.caption(
+            "**Naming requirements**\n\n"
+            "- 3-48 characters\n"
+            "- Start with a lowercase letter\n"
+            "- Use lowercase letters, digits, underscores (`_`) or hyphens (`-`)\n"
+            "- No spaces or uppercase letters\n\n"
+            "Example: `pulse360_faq_v2`"
+        )
         if st.form_submit_button("Create collection", icon=":material/add:"):
+            if not re.fullmatch(r"[a-z][a-z0-9_-]{2,47}", name.strip()):
+                st.error(
+                    "Collection name: use 3-48 characters, start with a lowercase letter, "
+                    "and use only lowercase letters, digits, underscores or hyphens. "
+                    "Example: pulse360_faq"
+                )
+                st.stop()
             result = api("POST", "/collections", json={"name": name.strip()})
             st.session_state.select_next = result["id"]
             st.session_state.notice = "Collection created."
