@@ -1,15 +1,11 @@
----
-noteId: "76d34a40b80211f19852c515e8cc9d2f"
-tags: []
-
----
-
-# Exact answer cache: first milestone
+# Exact and semantic answer cache
 
 ## Scope
 
-Redis stores successful cited answers for exact repeated questions sent to `/ask`
-with a managed `collection_id`. `/search` is unchanged. Default/CLI-only collections
+Redis stores successful cited answers for questions sent to `/ask` with a managed
+`collection_id`. Exact mode reuses identical questions. Semantic mode also reuses
+paraphrases when embedding similarity, current cited-evidence overlap, role and
+negation checks all pass. `/search` is unchanged. Default/CLI-only collections
 without catalog records bypass the cache. This is ordinary Redis, not the managed
 LangCache product. Public FAQ answers only; authenticated applications will need
 authorization and identity scope before cache lookup.
@@ -17,16 +13,23 @@ authorization and identity scope before cache lookup.
 ```mermaid
 flowchart TD
     A[POST /ask] --> B{Caching enabled and valid catalog scope?}
-    B -->|No| R[Existing vector retrieval]
+    B -->|No| U[Existing uncached RAG path]
     B -->|Yes| C[Redis exact lookup]
     C -->|Valid hit| H[Return cached answer and citations]
-    C -->|Miss or Redis unavailable| R
-    R --> L[Hosted answer generation when evidence exists]
+    C -->|Miss in semantic mode| R[Embed question and retrieve current evidence]
+    C -->|Miss in exact mode or Redis unavailable| U[Existing uncached RAG path]
+    R --> M{Similar cached question, compatible intent and evidence?}
+    M -->|Yes| H
+    M -->|No| L[Hosted answer generation when evidence exists]
+    U --> L
     L --> V{Successful cited answer and unchanged catalog?}
     V -->|Yes| S[Store with TTL]
     V -->|No| O[Return without caching]
     S --> O
 ```
+
+The durable promotion tier discussed in `roadmap.md` is planned, not part of this
+runtime. Current exact and semantic records expire from Redis.
 
 ## Local setup
 
@@ -36,7 +39,7 @@ Run from the repository directory in PowerShell:
 uv sync --extra dev --extra ui --extra cache
 docker compose --profile cache up -d redis
 docker compose exec -T redis redis-cli ping
-$env:ANSWER_CACHE_MODE = "exact"
+$env:ANSWER_CACHE_MODE = "semantic"
 $env:REDIS_URL = "redis://127.0.0.1:6380/0"
 .venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8769
 ```
@@ -55,7 +58,14 @@ The first successful request returns `cache_hit: false` and
 same answer/citations, and a fresh request ID. The initial request uses normal
 hosted-model credits. A hit does not call embeddings, Qdrant or the answer model.
 Leading/trailing whitespace is ignored; case, punctuation and internal spaces
-remain significant. Paraphrases still generate answers.
+remain significant for exact keys.
+
+With `ANSWER_CACHE_MODE=semantic`, a paraphrase exact-miss performs one embedding
+and one Qdrant retrieval. It returns `cache_type: "semantic"` and skips answer
+generation only when similarity is at least `SEMANTIC_CACHE_THRESHOLD` (default
+0.85), at least `SEMANTIC_CACHE_EVIDENCE_OVERLAP` (default 0.67) of the cached
+answer's cited chunks remain in current top-k results, and role/negation signatures
+match. A semantic hit is promoted to an exact key for faster future repeats.
 
 Set `ANSWER_CACHE_MODE=off` and restart to restore the uncached path. No data
 migration is required. Redis failure falls back to RAG with bounded Redis timeouts
@@ -74,10 +84,14 @@ and no retries. The Redis port is loopback-only; this is not production security
 - Abstentions, malformed entries and failed answers are not reused. Citation
   validation is not a factual accuracy guarantee: cached errors can repeat until
   invalidation. Review answer quality before semantic reuse.
+- Candidate scanning is bounded by `SEMANTIC_CACHE_MAX_CANDIDATES` (default 100)
+  per source/model scope. This application-side implementation is suitable for the
+  current prototype; a vector-capable cache index is a later scaling option.
 - Concurrent initial misses can still generate duplicate answers. Single-flight
-  locking, semantic similarity calibration and paraphrase validation are later work.
+  locking and broader evaluation-set calibration remain later work.
 - Cache flags describe this request, not measured token savings. Cached source
   scores belong to the original identical request.
+- Semantic hit counts and candidate-promotion decisions are not yet persisted.
 
 ## Tests
 
@@ -88,10 +102,11 @@ $env:TEST_REDIS_URL = "redis://127.0.0.1:6380/0"
 Remove-Item Env:TEST_REDIS_URL
 ```
 
-The opt-in Redis test uses the real Docker cache and FastAPI TestClient, with
-simulated retrieval and generation counters. It proves a second request avoids
-both operations, has a fresh request ID, and uses a TTL. It deletes only its unique
-test key. It does not call HF or prove a live generated answer is factually correct.
+The opt-in Redis tests use the real Docker cache with simulated generation counters.
+They prove exact reuse and one generation across the three documented System Admin
+paraphrases. Negative tests reject changed roles, negation and different evidence.
+Test keys are isolated and deleted. These tests do not prove a live generated answer
+is factually correct.
 
 Implementation: `src/faq_agent/cache/answers.py`, shared workflow in
 `src/faq_agent/retrieval/retriever.py`, configuration in `src/faq_agent/config.py`.

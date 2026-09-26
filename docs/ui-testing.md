@@ -1,9 +1,3 @@
----
-noteId: "9dfd3f70b0f211f183f7f156305e3c6d"
-tags: []
-
----
-
 # Local FAQ workspace
 
 The Streamlit UI calls FastAPI; only the backend holds HF and Qdrant credentials.
@@ -86,6 +80,10 @@ flowchart LR
     Query --> Search[Shared vector search]
     Search --> Q
     Search --> Matches[Chunks and vector scores]
-    Matches --> LLM[Hosted HF synthesis]
+    Query --> Redis[(Redis answer cache)]
+    Matches --> Redis
+    Redis -->|Exact or guarded semantic hit| Citations
+    Redis -->|Miss| LLM[Hosted HF synthesis]
     LLM --> Citations[Answer and validated citation IDs]
+    LLM --> Redis
 ```

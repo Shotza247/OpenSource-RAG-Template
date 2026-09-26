@@ -1,9 +1,3 @@
----
-noteId: "b48ef8e0b51711f19852c515e8cc9d2f"
-tags: []
-
----
-
 # Next milestone: fresh Qdrant Cloud ingestion
 
 Update 2026-09-21: the synthetic FAQ upload, cloud search and answer milestone has

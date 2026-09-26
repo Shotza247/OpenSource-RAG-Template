@@ -20,6 +20,7 @@ sequenceDiagram
     participant I as Ingestion service
     participant E as HF embeddings
     participant Q as Qdrant
+    participant R as Redis
     participant L as HF LLM
     U->>A: Preview upload in selected collection
     A->>I: Extract and chunk locally
@@ -31,12 +32,25 @@ sequenceDiagram
     I->>Q: Upsert deterministic point IDs
     I-->>U: Committed document record
     U->>A: Ask question with collection/document scope
+    A->>R: Exact answer lookup
+    alt Exact hit
+        R-->>A: Cached answer and citations
+        A-->>U: Exact cache hit
+    else Exact miss
     A->>E: Embed question
     A->>Q: Filtered similarity search
     Q-->>A: Chunks and vector scores
+    A->>R: Compare semantic candidates
+    alt Similarity, evidence and intent pass
+        R-->>A: Cached answer and citations
+        A-->>U: Semantic cache hit
+    else Semantic miss
     A->>L: Question and retrieved evidence
     L-->>A: Answer and citation IDs
+    A->>R: Store validated exact and semantic entries with TTL
     A-->>U: Validated answer or abstention
+    end
+    end
 ```
 
 ## Data and configuration
@@ -45,6 +59,10 @@ sequenceDiagram
 - SQLite: managed collection identities, embedding profiles, committed document
   records and expiring previews. The path stays `.local/library.sqlite3` across
   this package refactor; no vector migration is required.
+- Redis: optional exact and semantic answer entries. Semantic reuse is scoped by
+  the catalog/document inventory, model and prompt fingerprints, then guarded by
+  query similarity, current evidence overlap, role and negation intent. Redis is
+  disposable and is not the source of truth.
 - `.env`: private runtime settings. `.env.example`: supported keys and defaults.
   config.py validates settings. Existing retired keys in a private .env are ignored;
   setup_env.py --sync removes unsupported keys after creating a private backup.
@@ -68,6 +86,12 @@ the versioned CLI corpus from configuration. The optional Chroma adapter remains
 available for that CLI path (`uv sync --extra chroma`); upload management requires
 Qdrant. Other vector stores are not implemented.
 
+`ANSWER_CACHE_MODE` supports `off`, `exact` and `semantic`. Exact hits avoid
+embedding, retrieval and generation. Semantic hits still embed and retrieve so the
+current source evidence can be checked, but avoid answer generation. Redis failure
+falls back to the uncached RAG path. Source, prompt or model changes create a new
+cache scope rather than reusing stale answers.
+
 Approval is required before embedding. Duplicate content is idempotent per
 collection. Only committed documents are searchable; retrying an interrupted
 commit reuses deterministic point IDs. The catalog must be backed up alongside
@@ -82,9 +106,12 @@ planned dimensions, not a computed vector. See ui-testing.md for size limits.
 
 Similarity scores are not confidence estimates. Citation validation checks that
 IDs exist in the evidence; factual quality needs evaluation. There is no active
-reranking, LangGraph, conversational memory, Drive sync or monitoring stack.
+reranking, LangGraph, conversational memory, Drive/Box sync or monitoring stack.
+Semantic cache decisions are exposed in `/ask` responses but are not yet persisted
+as operational events.
 
-Next: evaluate real FAQs, then choose authentication, durable metadata storage,
-background jobs and deployment. Current SQLite/synchronous ingestion is not ready
-for ephemeral Vercel instances. The API Dockerfile is a packaging option, not a
-claim that production deployment has been validated.
+Next: add cache decision monitoring and a durable promoted-answer store. Promotion
+is planned after one generated answer plus two distinct qualifying paraphrase hits;
+it is not implemented. Google Drive and Box will then use a common source-adapter
+contract. Current SQLite/synchronous ingestion is not ready for ephemeral Vercel
+instances. The API Dockerfile is packaging, not a validated production deployment.

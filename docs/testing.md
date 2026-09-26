@@ -1,9 +1,3 @@
----
-noteId: "8ddceac0b10e11f183f7f156305e3c6d"
-tags: []
-
----
-
 # Testing and evaluation
 
 ## Offline tests
@@ -69,38 +63,25 @@ To actually ingest, use a new version and explicitly pass --approved-public only
 after reviewing all files in the source folder. This CLI does not register UI
 documents. Prefer the UI for individual collection-scoped uploads.
 
-# Test Redis cache
+## Redis cache checks
 
-- Inspect Saved Answers
-From the OpenSource-RAG-Template terminal, list cached keys:
+Use `docs/answer-cache.md` for activation and acceptance criteria. Inspect only
+your active namespace; hashed keys intentionally do not expose questions:
 
-```
+```powershell
 docker compose exec -T redis redis-cli --scan --pattern 'faq-answer-v1:*'
+docker compose exec -T redis redis-cli DBSIZE
 ```
 
-- Sample Output Key:
-```
-faq-answer-v1:d24ce5499d1ef7f0fa7662539e2fd016a993639055a61058f24ab6c1515712ef
+For deterministic verification, run the opt-in real Redis tests after starting the
+cache container:
+
+```powershell
+$env:TEST_REDIS_URL = "redis://127.0.0.1:6380/0"
+.\.venv\Scripts\python.exe -m pytest tests/test_answer_cache.py -q -p no:cacheprovider
+Remove-Item Env:TEST_REDIS_URL
 ```
 
-- View the saved answer and citations
-```
-docker compose exec -T redis redis-cli GET "faq-answer-v1:d24ce5499d1ef7f0fa7662539e2fd016a993639055a61058f24ab6c1515712ef"
-```
-- Output:
-```
-{"answer":"As a System Admin, you can access aggregated audit data, platform adoption metrics, operational analytics, and AI-usage analytics. The System Admin dashboard is for monitoring platform health and behavior, such as adoption, operational throughput, aggregate workflow health, AI usage metadata, token totals, and recent governance events. System Admins should not see sensitive review comments, individual review scores, or a direct map of who nominated whom. Access is role-based and enforced on both the user interface and server-side APIs, with all sensitive queries and mutations verified for identity, role, organization scope, and permitted entity scope.",
-"status":"answered",
-"sources":
-[{"chunk_id":"be0c944d2d21b98fbadd2d28","title":"Pulse360_Platform_FAQ","section":"FAQ","vector_score":0.73077905,"rerank_score":null,"filename":"Pulse360_Platform_FAQ.pdf","page":2,"document_id":"613801d9080c9036deea04733fe7758b60924d191d0222d12bca3ab10f89ddae"},{"chunk_id":"da82ed4be93097c5ecd76f93","title":"Pulse360_Platform_FAQ","section":"FAQ","vector_score":0.6994294,"rerank_score":null,"filename":"Pulse360_Platform_FAQ.pdf","page":2,"document_id":"613801d9080c9036deea04733fe7758b60924d191d0222d12bca3ab10f89ddae"},{"chunk_id":"f76cfc74eb31974854a06ac9","title":"Pulse360_Platform_FAQ","section":"FAQ","vector_score":0.6949256,"rerank_score":null,"filename":"Pulse360_Platform_FAQ.pdf","page":5,"document_id":"613801d9080c9036deea04733fe7758b60924d191d0222d12bca3ab10f89ddae"}]}
-```
-
-- Check remaining lifetime in seconds:
-```
-docker compose exec -T redis redis-cli TTL "faq-answer-v1:d24ce5499d1ef7f0fa7662539e2fd016a993639055a61058f24ab6c1515712ef"
-```
-
-- Output depending on the time:
-```
-2075
-```
+The current semantic acceptance set covers the three System Admin paraphrases.
+It also rejects altered role, negation and evidence controls. Cache decision history
+and durable promoted answers are pending; see `docs/roadmap.md`.

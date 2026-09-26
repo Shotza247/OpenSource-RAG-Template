@@ -1,9 +1,3 @@
----
-noteId: "6a3744b0b58911f19852c515e8cc9d2f"
-tags: []
-
----
-
 # Local and Qdrant Cloud testing
 
 The Streamlit sidebar's **Qdrant Cloud** toggle selects an API runtime, not a data
@@ -66,3 +60,5 @@ This verifies a synthetic cloud-storage workflow, not the full Pulse360 PDF. API
 Streamlit and both SQLite catalogs still run on this computer. Cloud vector storage
 is NOT a deployed backend; durable hosted metadata, write authorization, quotas and
 deployment verification remain required. No paid endpoint or new model was provisioned.
+Redis answer caching has been verified locally. A hosted Redis deployment and its
+network/authentication configuration are still pending.

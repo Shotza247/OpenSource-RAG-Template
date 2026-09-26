@@ -1,5 +1,50 @@
 # Verification and recovery
 
+## 2026-09-25 - Documentation and roadmap refresh
+
+- Status: passed in staged documentation; repository copy requires the user's
+  local write operation because this chat does not own that project workspace.
+- Goal: align documentation with semantic cache verification, current commits and
+  the planned durable-answer promotion tier.
+- Changes: removed obsolete note metadata and raw cached-answer examples; refreshed
+  diagrams; added a single feature/issue roadmap with explicit implemented versus
+  planned status.
+- Evidence: repository review found stale 55-test wording and old cache-only
+  diagrams; the semantic baseline is 73 passed with two opt-in skips, plus real
+  Redis and live hosted acceptance already recorded above.
+- Follow-up: copy staged files into the repository, review Mermaid rendering, then
+  create separate semantic-cache and documentation commits.
+
+## 2026-09-25 - Paraphrase cache misses
+
+- Status: fixed for the three target paraphrases; broader FAQ calibration remains monitoring.
+- Symptom: three equivalent System Admin questions created separate exact keys;
+  one wording missed despite substantially identical retrieval context.
+- Cause: the first cache implementation intentionally hashed exact question text
+  and performed no semantic comparison.
+- Changes: added opt-in semantic mode using the existing hosted query embedding,
+  current Qdrant evidence overlap, and conservative role/negation intent guards.
+  Semantic hits skip answer generation and are promoted to exact keys.
+- Calibration: hosted BGE embeddings scored 0.9028 between "access" and "see" and
+  0.8630 between "access" and "As the system admin...see". All three retrieved
+  the same three answer-supporting chunks. The default threshold is 0.85. A negated
+  control scored 0.8418 against "access" and is independently rejected by polarity;
+  a manager control scored 0.6436 and is rejected by role.
+- Reliability fix: real Docker Redis exposed occasional read fallback at the former
+  0.3-second socket timeout. `REDIS_TIMEOUT` now defaults to 1.0 second and remains
+  bounded/configurable.
+- Verification: 73 full-suite tests passed (2 opt-in skips). With real Docker Redis,
+  10 cache tests passed, including one simulated generation and two semantic hits
+  for the three target paraphrases. Repository lint passed for all changed files;
+  one pre-existing style finding remains in scripts/migrate_test_collections.py.
+- Live acceptance: an isolated semantic API on port 8770 with a fresh namespace
+  returned one generated answer for "What can a System Admin access?", followed by
+  semantic hits for "What can a System Admin see?" and "As the system admin what
+  can i see?". Both hits reused the same three cited chunks and reported
+  `answer_generation_called: false`. Request IDs were distinct.
+- Follow-up: add cache decision monitoring. Broader FAQ evaluation is required
+  before lowering thresholds.
+
 ## 2026-09-24 - Optional exact-answer Redis cache
 
 - Added Docker Redis on loopback port 6380, optional redis-py dependency, catalog-scoped

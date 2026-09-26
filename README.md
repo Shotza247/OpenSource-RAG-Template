@@ -19,10 +19,11 @@ FastAPI serves the backend, Streamlit is the test UI, Qdrant stores vectors, and
 Hugging Face hosts embedding and answer models.
 SQLite tracks document ingestion.
 
-Optional Docker Redis exact-answer caching is available for managed public FAQ
-collections. It is off by default and leaves the existing uncached workflow intact.
-See [answer-cache setup and verification](docs/answer-cache.md). Semantic/paraphrase
-reuse and LangCache integration are not implemented.
+Optional Docker Redis exact and guarded semantic-answer caching is available for
+managed public FAQ collections. It is off by default and leaves the existing
+uncached workflow intact. See [answer-cache setup and verification](docs/answer-cache.md).
+Semantic hits require question similarity, current evidence overlap, and compatible
+role/negation intent. LangCache integration is not implemented.
 
 ## Project structure
 
@@ -35,7 +36,7 @@ OpenSource-RAG-Template/
   .env                       # Private local configuration; ignored by Git
   main.py                    # FastAPI entry point
   streamlit_app.py            # UI entry point
-  docker-compose.yml         # Local Qdrant; optional Chroma profile
+  docker-compose.yml         # Local Qdrant, Redis cache; optional Chroma profile
   Dockerfile                 # API container definition
   src/faq_agent/
     config.py                # Validated settings and project paths
@@ -47,6 +48,7 @@ OpenSource-RAG-Template/
     embeddings/embedder.py   # Hosted embedding client and vector validation
     vectordb/vector_store.py # Qdrant and optional Chroma adapters
     retrieval/retriever.py   # Shared search and answer workflow
+    cache/answers.py         # Exact and guarded semantic Redis cache
     prompts/templates.py     # Grounding instructions and abstention text
     llm/client.py            # Hosted synthesis and citation validation
     api/
@@ -59,6 +61,7 @@ OpenSource-RAG-Template/
     architecture.md          # Responsibilities, data flow, limitations
     ui-testing.md            # Upload workflow and API reference
     testing.md               # Automated and live verification
+    roadmap.md               # Implemented features and prioritized issues
   BUG_AUDIT.md               # Concise current verification/recovery record
   .local/                    # Ignored SQLite catalog, logs and local backups
 ```
@@ -72,13 +75,14 @@ Only add utility modules when there is shared logic to put in them😉.
 
 ## Run locally
 
-Requires Python 3.11-3.13, uv and Docker for Qdrant.
+Requires Python 3.11-3.13, uv and Docker for Qdrant. Redis is optional.
 
 ```powershell
-uv sync --locked --extra dev --extra ui
+uv sync --locked --extra dev --extra ui --extra cache
 .\.venv\Scripts\python.exe scripts/setup_env.py --sync
 .\.venv\Scripts\python.exe scripts/setup_env.py --token
 docker compose up -d qdrant
+docker compose --profile cache up -d redis
 ```
 
 The setup script backs up an existing .env before merging current keys; it preserves
@@ -112,12 +116,17 @@ flowchart LR
     Approve --> Embed[Hosted HF embeddings]
     Embed --> Q[(Qdrant)]
     UI --> Query[Question and collection scope]
-    Query --> Search[Shared vector search]
+    Query --> Exact{Redis exact hit?}
+    Exact -->|Yes| Answer[Answer and validated citations]
+    Exact -->|No| Search[Embed question and vector search]
     Search --> Q
     Search --> Evidence[Chunks and vector scores]
     Evidence --> Result[Search response]
-    Evidence --> LLM[Hosted HF synthesis]
-    LLM --> Answer[Answer and validated citations]
+    Evidence --> Semantic{Guarded semantic hit?}
+    Semantic -->|Yes| Answer
+    Semantic -->|No| LLM[Hosted HF synthesis]
+    LLM --> Cache[Store exact and semantic entries with TTL]
+    Cache --> Answer
 ```
 
 Preview is local and makes no model calls. Embed and store sends approved text to
@@ -132,9 +141,10 @@ collection remains accessible through requests without collection_id.
 
 ## Verification and boundaries
 
-Verified locally on 2026-09-15: all 55 tests and lint passed. After restart,
-collection-scoped search/answer and the original demo search passed live checks;
-existing collection identities and document counts were unchanged.
+Latest verified baseline on 2026-09-25: 73 tests passed with two opt-in Redis tests
+skipped; all 10 cache tests passed with real Docker Redis. A live hosted run produced
+one answer followed by two semantic paraphrase hits with no additional answer
+generation. See [current feature and issue status](docs/roadmap.md).
 
 - [Tests and evaluation](docs/testing.md)
 - [Architecture and configuration](docs/architecture.md)
