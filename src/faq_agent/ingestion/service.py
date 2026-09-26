@@ -270,7 +270,7 @@ class Library:
             db.execute("UPDATE previews SET committed=1 WHERE id=?", (token,))
         return {"status": "stored", "document_id": row["document_id"], "chunks": len(chunks)}
 
-    def search(self, name, question, document_id=None):
+    def search(self, name, question, document_id=None, query_vector=None):
         collection = self.collection(name)
         docs = self.documents(name)
         ids = [d["id"] for d in docs]
@@ -280,7 +280,7 @@ class Library:
             ids = [document_id]
         if not ids:
             return []
-        vector = self.embeddings.embed_query(question)
+        vector = query_vector or self.embeddings.embed_query(question)
         validate_vectors([vector], 1, self.s.vector_dimensions)
         results = self.client.query_points(
             collection["physical"],

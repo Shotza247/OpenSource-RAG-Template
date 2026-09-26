@@ -6,7 +6,14 @@ from uuid import uuid4
 
 import pytest
 
-from faq_agent.cache.answers import RedisAnswerCache, build_answer_cache, cache_key
+from faq_agent.cache.answers import (
+    RedisAnswerCache,
+    build_answer_cache,
+    cache_key,
+    cache_scope,
+    cosine_similarity,
+    intent_signature,
+)
 from faq_agent.config import Settings
 from faq_agent.retrieval import retriever
 
@@ -76,6 +83,12 @@ class MemoryCache:
     def put(self, key, value):
         self.values[key] = value
 
+    def semantic_get(self, scope, question, vector, matches):
+        return None
+
+    def semantic_put(self, scope, question, vector, answer):
+        pass
+
     def close(self):
         pass
 
@@ -115,6 +128,96 @@ def test_disabled_path(monkeypatch, settings, answer):
     for _ in range(2):
         assert not retriever.answer_question("q", "faq")["cache_hit"]
     assert counts["generation"] == 2
+
+
+class SemanticMemoryCache(MemoryCache):
+    def __init__(self):
+        super().__init__()
+        self.entries = []
+
+    def semantic_get(self, scope, question, vector, matches):
+        current_ids = {match["chunk_id"] for match in matches}
+        for saved_scope, saved_intent, saved_vector, saved_answer in self.entries:
+            source_ids = {source["chunk_id"] for source in saved_answer["sources"]}
+            overlap = len(source_ids & current_ids) / len(source_ids)
+            if (
+                saved_scope == scope
+                and saved_intent == intent_signature(question)
+                and cosine_similarity(vector, saved_vector) >= 0.85
+                and overlap >= 0.67
+            ):
+                return saved_answer
+        return None
+
+    def semantic_put(self, scope, question, vector, answer):
+        self.entries.append((scope, intent_signature(question), vector, answer))
+
+
+def test_semantic_paraphrases_reuse_one_generation(monkeypatch, settings, answer):
+    settings = replace(settings, answer_cache_mode="semantic")
+    cache = SemanticMemoryCache()
+    counts = wire(monkeypatch, settings, answer, cache)
+    vectors = {
+        "What can a System Admin access?": [1.0, 0.0],
+        "What can a System Admin see?": [0.99, 0.01],
+        "As the system admin what can i see?": [0.98, 0.02],
+        "What can a manager see?": [0.99, 0.01],
+        "What can a System Admin not see?": [0.99, 0.01],
+    }
+
+    def semantic_search(question, *args):
+        counts["search"] += 1
+        return vectors[question], answer["sources"]
+
+    monkeypatch.setattr(retriever, "search_question_with_vector", semantic_search)
+    first = retriever.answer_question("What can a System Admin access?", "faq")
+    second = retriever.answer_question("What can a System Admin see?", "faq")
+    third = retriever.answer_question("As the system admin what can i see?", "faq")
+    assert not first["cache_hit"]
+    assert second["cache_type"] == third["cache_type"] == "semantic"
+    assert not second["answer_generation_called"] and not third["answer_generation_called"]
+    assert counts["generation"] == 1
+
+    manager = retriever.answer_question("What can a manager see?", "faq")
+    negated = retriever.answer_question("What can a System Admin not see?", "faq")
+    assert not manager["cache_hit"] and not negated["cache_hit"]
+    assert counts["generation"] == 3
+
+
+def test_semantic_reuse_requires_current_evidence(monkeypatch, settings, answer):
+    settings = replace(settings, answer_cache_mode="semantic")
+    cache = SemanticMemoryCache()
+    counts = wire(monkeypatch, settings, answer, cache)
+    calls = iter(
+        [
+            ([1.0, 0.0], answer["sources"]),
+            ([0.99, 0.01], [{**answer["sources"][0], "chunk_id": "different"}]),
+        ]
+    )
+    monkeypatch.setattr(retriever, "search_question_with_vector", lambda *args: next(calls))
+    retriever.answer_question("What can a System Admin access?", "faq")
+    result = retriever.answer_question("What can a System Admin see?", "faq")
+    assert not result["cache_hit"] and result["answer_generation_called"]
+    assert counts["generation"] == 2
+
+
+def test_semantic_configuration_and_intent_guards(settings):
+    assert cache_scope(settings, "faq")
+    assert intent_signature("What can a System Admin see?") == intent_signature(
+        "As the system administrator, what can I access?"
+    )
+    assert intent_signature("What can a manager see?") != intent_signature(
+        "What can a System Admin see?"
+    )
+    assert intent_signature("What can a System Admin not see?") != intent_signature(
+        "What can a System Admin see?"
+    )
+    with pytest.raises(ValueError, match="ANSWER_CACHE_MODE"):
+        replace(settings, answer_cache_mode="unknown")
+    with pytest.raises(ValueError, match="SEMANTIC_CACHE_THRESHOLD"):
+        replace(settings, semantic_cache_threshold=1.1)
+    with pytest.raises(ValueError, match="REDIS_TIMEOUT"):
+        replace(settings, redis_timeout=0)
 
 
 def test_redis_adapter_errors_ttl_and_abstention(monkeypatch, settings, answer):
@@ -165,4 +268,45 @@ def test_real_redis_api_hit(monkeypatch, settings, answer):
         assert 0 < cache.client.ttl(key) <= settings.answer_cache_ttl
     finally:
         cache.client.delete(key)
+        cache.close()
+
+
+@pytest.mark.skipif(not os.getenv("TEST_REDIS_URL"), reason="Opt-in real Redis smoke test")
+def test_real_redis_semantic_paraphrase_reuse(monkeypatch, settings, answer):
+    settings = replace(
+        settings,
+        answer_cache_mode="semantic",
+        redis_url=os.environ["TEST_REDIS_URL"],
+        answer_cache_namespace="test-semantic-" + uuid4().hex,
+    )
+    counts = {"search": 0, "generation": 0}
+    monkeypatch.setattr(retriever, "get_settings", lambda: settings)
+    monkeypatch.setattr(retriever, "build_answer_cache", lambda _: RedisAnswerCache(settings))
+    vectors = iter(([1.0, 0.0], [0.99, 0.01], [0.98, 0.02]))
+
+    def semantic_search(*args):
+        counts["search"] += 1
+        return next(vectors), answer["sources"]
+
+    def synthesize(*args):
+        counts["generation"] += 1
+        return answer
+
+    monkeypatch.setattr(retriever, "search_question_with_vector", semantic_search)
+    monkeypatch.setattr(retriever, "synthesize", synthesize)
+    questions = (
+        "What can a System Admin access?",
+        "What can a System Admin see?",
+        "As the system admin what can i see?",
+    )
+    try:
+        results = [retriever.answer_question(question, "faq") for question in questions]
+        assert not results[0]["cache_hit"]
+        assert [result["cache_type"] for result in results[1:]] == ["semantic", "semantic"]
+        assert counts == {"search": 3, "generation": 1}
+    finally:
+        cache = RedisAnswerCache(settings)
+        keys = list(cache.client.scan_iter(match=settings.answer_cache_namespace + ":*"))
+        if keys:
+            cache.client.delete(*keys)
         cache.close()

@@ -38,14 +38,26 @@ class Settings:
     catalog_path: str = ""
     answer_cache_mode: str = "off"
     redis_url: str = "redis://127.0.0.1:6380/0"
+    redis_timeout: float = 1.0
     answer_cache_ttl: int = 3600
     answer_cache_namespace: str = "faq-answer-v1"
+    semantic_cache_threshold: float = 0.85
+    semantic_cache_evidence_overlap: float = 0.67
+    semantic_cache_max_candidates: int = 100
 
     def __post_init__(self):
-        if self.answer_cache_mode not in {"off", "exact"}:
-            raise ValueError("ANSWER_CACHE_MODE must be off or exact")
+        if self.answer_cache_mode not in {"off", "exact", "semantic"}:
+            raise ValueError("ANSWER_CACHE_MODE must be off, exact or semantic")
         if self.answer_cache_ttl < 1 or not self.answer_cache_namespace:
             raise ValueError("Cache TTL must be positive and namespace nonempty")
+        if not 0.1 <= self.redis_timeout <= 10:
+            raise ValueError("REDIS_TIMEOUT must be between 0.1 and 10 seconds")
+        if not 0 <= self.semantic_cache_threshold <= 1:
+            raise ValueError("SEMANTIC_CACHE_THRESHOLD must be between 0 and 1")
+        if not 0 <= self.semantic_cache_evidence_overlap <= 1:
+            raise ValueError("SEMANTIC_CACHE_EVIDENCE_OVERLAP must be between 0 and 1")
+        if not 1 <= self.semantic_cache_max_candidates <= 1000:
+            raise ValueError("SEMANTIC_CACHE_MAX_CANDIDATES must be between 1 and 1000")
         if self.llm_provider != "huggingface":
             raise ValueError("Only hosted Hugging Face synthesis is currently supported")
         if self.vector_store not in {"qdrant", "chroma"}:
